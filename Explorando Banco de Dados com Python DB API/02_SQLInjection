@@ -1,0 +1,24 @@
+import sqlite3
+from pathlib import Path
+
+#para criar no caminho raiz do diretorio do projeto, utilizar :
+ROOT_PATH = Path(__file__).parent
+
+conexao = sqlite3.connect(ROOT_PATH / "cliente.db")
+cursor = conexao.cursor()
+cursor.row_factory = sqlite3.Row
+
+id_cliente = input("Informe o id do cliente: ")
+cursor.execute(f"SELECT * FROM clientes WHERE id={id_cliente}")
+
+#recuperar um cliente
+#cliente = cursor.fetchone()
+#print(dict(cliente))
+
+#recuperar varios clientes
+clientes = cursor.fetchall()
+for cli in clientes:
+    print(dict(cli))
+
+#exemplo de sql injectio: informar o id do cliente e or 1=1
+#Informe o id do cliente: 1 or 1=1 (o id u1 não existe na tabela)
