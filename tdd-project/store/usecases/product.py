@@ -6,6 +6,18 @@ from store.db.mongo import db_client
 from store.models.product import ProductModel
 from store.schemas.product import ProductIn, ProductOut, ProductUpdate, ProductUpdateOut
 from store.core.exceptions import NotFoundException
+from datetime import datetime
+
+# Exceptions
+class NotFoundException(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
+
+class InsertionException(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
 
 
 class ProductUsecase:
@@ -15,9 +27,11 @@ class ProductUsecase:
         self.collection = self.database.get_collection("products")
 
     async def create(self, body: ProductIn) -> ProductOut:
-        product_model = ProductModel(**body.model_dump())
-        await self.collection.insert_one(product_model.model_dump())
-
+        try:
+            product_model = ProductModel(**body.model_dump())
+            await self.collection.insert_one(product_model.model_dump())
+        except Exception as e:
+            raise InsertionException(message="Error inserting product: " + str(e))
         return ProductOut(**product_model.model_dump())
 
     async def get(self, id: UUID) -> ProductOut:
@@ -28,15 +42,20 @@ class ProductUsecase:
 
         return ProductOut(**result)
 
-    async def query(self) -> List[ProductOut]:
-        return [ProductOut(**item) async for item in self.collection.find()]
+    async def query(self, min_price: float = 5000, max_price: float = 8000) -> List[ProductOut]:
+        cursor = self.collection.find({"price": {"$gt": min_price, "$lt": max_price}})
+        return [ProductOut(**item) async for item in cursor]
 
     async def update(self, id: UUID, body: ProductUpdate) -> ProductUpdateOut:
+        body.updated_at = datetime.utcnow()
         result = await self.collection.find_one_and_update(
             filter={"id": id},
             update={"$set": body.model_dump(exclude_none=True)},
             return_document=pymongo.ReturnDocument.AFTER,
         )
+
+        if not result:
+            raise NotFoundException(message=f"Product not found with filter: {id}")
 
         return ProductUpdateOut(**result)
 
@@ -48,6 +67,5 @@ class ProductUsecase:
         result = await self.collection.delete_one({"id": id})
 
         return True if result.deleted_count > 0 else False
-
 
 product_usecase = ProductUsecase()
